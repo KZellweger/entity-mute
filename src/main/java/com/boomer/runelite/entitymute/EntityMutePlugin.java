@@ -14,7 +14,7 @@ import net.runelite.client.plugins.PluginDescriptor;
 
 @Slf4j
 @PluginDescriptor(
-	name = "Example"
+	name = "Entity-Mute"
 )
 public class EntityMutePlugin extends Plugin
 {
