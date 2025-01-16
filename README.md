@@ -1,2 +1,2 @@
 # Example
-init commit
+test git settings
