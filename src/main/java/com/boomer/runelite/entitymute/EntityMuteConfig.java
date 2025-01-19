@@ -4,16 +4,18 @@ import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 
-@ConfigGroup("entityMute")
+@ConfigGroup(EntityMuteConfig.GROUP)
 public interface EntityMuteConfig extends Config
 {
+	String GROUP = "entityMute";
+
 	@ConfigItem(
-		keyName = "greeting",
-		name = "Welcome Greeting",
-		description = "The message to show to the user when they login"
+		keyName = "muteIndicator",
+		name = "Show Mute Indicator",
+		description = "Render Icon to display MuteState of Objects and NPCs"
 	)
-	default String greeting()
+	default boolean greeting()
 	{
-		return "Hello";
+		return true;
 	}
 }
