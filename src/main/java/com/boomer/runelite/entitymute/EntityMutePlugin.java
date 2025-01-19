@@ -31,8 +31,8 @@ import java.util.stream.Collectors;
 public class EntityMutePlugin extends Plugin {
     private final Map<NPC, HighlightedNpc> highlightedNpcs = new HashMap<>();
     private final Function<NPC, HighlightedNpc> isHighlighted = highlightedNpcs::get;
-    private final Map<Integer, MutedGameObject> mutedGameObjects = new HashMap<>();
-    private final Map<Integer, MutedNpc> mutedNpcs = new HashMap<>();
+    private final Set<Integer> mutedGameObjects = new HashSet<>();
+    private final Set<Integer> mutedNpcs = new HashSet<>();
 
     // Option added to menu
     private static final String MUTE = "Mute";
@@ -69,6 +69,24 @@ public class EntityMutePlugin extends Plugin {
         int targetIdentifier  = menuOptionClicked.getMenuEntry().getIdentifier();
         menuOptionClicked.getMenuTarget();
         log.debug("Menu option clicked: {}, id {}", menuOptionClicked.getMenuTarget(), targetIdentifier);
+    }
+
+    @Subscribe
+    public void onMenuEntryAdded(MenuEntryAdded menuEntryAdded) {
+        final MenuEntry menuEntry = menuEntryAdded.getMenuEntry();
+        final MenuAction menuAction = menuEntry.getType();
+        if(menuAction == MenuAction.GAME_OBJECT_FIRST_OPTION){
+            int idx = -1;
+            int targetIdentifier  = menuEntryAdded.getIdentifier();
+            client.createMenuEntry(-1)
+                    .setOption(mutedGameObjects.contains(targetIdentifier) ? UN_MUTE : MUTE)
+                    .setTarget(menuEntryAdded.getTarget())
+                    .setIdentifier(targetIdentifier)
+                    .setType(MenuAction.RUNELITE)
+                    .onClick( it -> toggleMuteGameObject(it.getIdentifier()));
+            entityMuteOverlay.addGameObjectToOverlay(targetIdentifier);
+        }
+
     }
 
     @Subscribe
@@ -110,7 +128,6 @@ public class EntityMutePlugin extends Plugin {
             return;
         }
         final Actor actor = soundEffectPlayed.getSource();
-        String actorString = "None";
 
         Player localPlayer = client.getLocalPlayer();
         WorldView playersWorldView = localPlayer.getWorldView();
@@ -131,10 +148,15 @@ public class EntityMutePlugin extends Plugin {
         tilesToCheck.add(tiles[z][areaSoundEffectOriginSceneX +1 ][areaSoundEffectOriginSceneY + 1]);
         tilesToCheck.add(tiles[z][areaSoundEffectOriginSceneX - 1 ][areaSoundEffectOriginSceneY - 1]);
 
-        List<GameObject> possibleOriginObjects = tilesToCheck.stream().flatMap(tile -> Arrays.stream(tile.getGameObjects()).filter(Objects::nonNull)).collect(Collectors.toList());
+        Set<Integer> possibleOriginObjects = tilesToCheck.stream().flatMap(tile -> Arrays.stream(tile.getGameObjects()).filter(Objects::nonNull)).map(TileObject::getId).collect(Collectors.toSet());
 
-        for(GameObject gameObject : possibleOriginObjects) {
-            log.warn("Found possible Sound origin game object: {}", gameObject.getId());
+        if(possibleOriginObjects.size() > 1) {
+            log.warn("Multiple game objects found at sound effect origin: {}", possibleOriginObjects);
+        }
+
+        if(possibleOriginObjects.stream().anyMatch(mutedGameObjects::contains)){
+            log.debug("Muted Sound effect: {}", soundEffectPlayed.getSoundId());
+            soundEffectPlayed.consume();
         }
 
         if (actor instanceof NPC) {
@@ -146,29 +168,27 @@ public class EntityMutePlugin extends Plugin {
     }
 
 
-    public void toggleMuteNpc(NPC npc) {
-        MutedNpc mutedNpc = new MutedNpc(npc.getId(), npc.getName());
-        if(isMuted(npc)){
-            mutedNpcs.remove(npc.getId());
+    public void toggleMuteNpc(int npcId) {
+        if(npcIsMuted(npcId)){
+            mutedNpcs.remove(npcId);
         } else {
-            mutedNpcs.put(npc.getId(), mutedNpc);
+            mutedNpcs.add(npcId);
         }
     }
 
-    public void toggleMuteGameObject(GameObject gameObject) {
-        MutedGameObject mutedGameObject = new MutedGameObject(gameObject.getId());
-        if(isMuted(gameObject)){
-            mutedGameObjects.remove(gameObject.getId());
+    public void toggleMuteGameObject(int gameObjectId) {
+        if(objectIsMuted(gameObjectId)){
+            mutedGameObjects.remove(gameObjectId);
         } else {
-            mutedGameObjects.put(gameObject.getId(), mutedGameObject);
+            mutedGameObjects.add(gameObjectId);
         }
     }
 
-    public boolean isMuted(NPC npc) {
-        return mutedNpcs.containsKey(npc.getId());
+    public boolean npcIsMuted(int npcId) {
+        return mutedNpcs.contains(npcId);
     }
-    public boolean isMuted(GameObject gameObject) {
-        return mutedGameObjects.containsKey(gameObject.getId());
+    public boolean objectIsMuted(int gameObject) {
+        return mutedGameObjects.contains(gameObject);
     }
 
     @Override
@@ -216,16 +236,4 @@ public class EntityMutePlugin extends Plugin {
         }
         return null; // Return null if no matching value is found
     }
-
-    @Data
-    private static class MutedGameObject {
-        private final int id;
-    }
-
-    @Data
-    private static class MutedNpc {
-        private final int id;
-        private final String name;
-    }
-
 }
